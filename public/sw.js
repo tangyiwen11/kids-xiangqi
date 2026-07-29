@@ -1,4 +1,4 @@
-const CACHE = "kids-xiangqi-v2";
+const CACHE = "kids-xiangqi-v3";
 const CORE = ["/", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {

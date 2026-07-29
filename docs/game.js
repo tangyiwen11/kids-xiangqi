@@ -17,6 +17,7 @@
   } = Xiangqi;
 
   const STORAGE_KEY = "kids-xiangqi-pages-v1";
+  const DIFFICULTY_VERSION = 2;
   const boardElement = document.querySelector("#board");
   const messageElement = document.querySelector("#message");
   const statusTitleElement = document.querySelector("#status-title");
@@ -85,7 +86,10 @@
   }
 
   function save() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ history, difficulty, openingPlan }));
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ history, difficulty, difficultyVersion: DIFFICULTY_VERSION, openingPlan }),
+    );
   }
 
   function load() {
@@ -101,7 +105,13 @@
         [1, 2, 3].includes(Number(parsed.difficulty))
       ) {
         history = parsed.history;
-        difficulty = Number(parsed.difficulty);
+        const savedDifficulty = Number(parsed.difficulty);
+        difficulty =
+          parsed.difficultyVersion === DIFFICULTY_VERSION
+            ? savedDifficulty
+            : savedDifficulty === 3
+              ? 2
+              : 1;
         if (
           ["screen-horses", "central-cannon", "steady-horses", "flying-elephant"].includes(
             parsed.openingPlan,
@@ -390,7 +400,7 @@
 
   difficultyElement.addEventListener("change", () => {
     difficulty = Number(difficultyElement.value);
-    message = `难度调到${["", "一级 · 轻松", "二级 · 刚好", "三级 · 认真"][difficulty]}。`;
+    message = `难度调到${["", "一级 · 轻松", "二级 · 刚好", "三级 · 挑战"][difficulty]}。`;
     save();
     render();
   });

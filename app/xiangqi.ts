@@ -28,6 +28,30 @@ const VALUES: Record<PieceType, number> = {
   pawn: 120,
 };
 
+const DIFFICULTY_SETTINGS = {
+  1: {
+    responseDanger: 0.42,
+    noise: 260,
+    sensibleGap: 360,
+    poolSize: 4,
+    openingStrength: 0.86,
+  },
+  2: {
+    responseDanger: 0.72,
+    noise: 95,
+    sensibleGap: 190,
+    poolSize: 3,
+    openingStrength: 1.08,
+  },
+  3: {
+    responseDanger: 0.9,
+    noise: 34,
+    sensibleGap: 115,
+    poolSize: 2,
+    openingStrength: 1.16,
+  },
+} as const;
+
 export const pieceNames: Record<Color, Record<PieceType, string>> = {
   red: {
     rook: "车",
@@ -267,7 +291,7 @@ export function chooseOpeningPlan(board: Board, difficulty: 1 | 2 | 3): OpeningP
   });
 
   if (redUsesCentralCannon) {
-    const screenHorseChance = difficulty === 1 ? 0.52 : difficulty === 2 ? 0.72 : 0.82;
+    const screenHorseChance = difficulty === 1 ? 0.72 : difficulty === 2 ? 0.82 : 0.88;
     return Math.random() < screenHorseChance ? "screen-horses" : "central-cannon";
   }
   if (redUsesFlyingElephant) {
@@ -366,6 +390,82 @@ function openingScore(move: Move, plan: OpeningPlan | null, computerMovesPlayed:
   return score;
 }
 
+function mostValuableTarget(board: Board, victimColor: Color) {
+  let risk = 0;
+  for (let row = 0; row < 10; row += 1) {
+    for (let col = 0; col < 9; col += 1) {
+      const piece = board[row][col];
+      if (!piece || piece.color !== victimColor || piece.type === "king") continue;
+      if (!isSquareAttacked(board, row, col, opposite(victimColor))) continue;
+      const defended = isSquareAttacked(board, row, col, victimColor);
+      risk = Math.max(risk, VALUES[piece.type] * (defended ? 0.42 : 0.78));
+    }
+  }
+  return risk;
+}
+
+function evaluateBoard(board: Board) {
+  return (
+    materialScore(board, "black") +
+    mostValuableTarget(board, "red") * 0.42 -
+    mostValuableTarget(board, "black") * 0.64 +
+    (isInCheck(board, "red") ? 135 : 0) -
+    (isInCheck(board, "black") ? 170 : 0)
+  );
+}
+
+function searchMovePriority(board: Board, move: Move, color: Color) {
+  const next = applyMove(board, move);
+  const movedPieceAttacked = isSquareAttacked(next, move.to[0], move.to[1], opposite(color));
+  const movedPieceDefended = isSquareAttacked(next, move.to[0], move.to[1], color);
+  return {
+    move,
+    next,
+    score:
+      (move.captured ? VALUES[move.captured.type] * 1.3 : 0) +
+      (isInCheck(next, opposite(color)) ? 155 : 0) +
+      (4 - Math.abs(4 - move.to[1])) * 2 -
+      (movedPieceAttacked
+        ? VALUES[move.piece.type] * (movedPieceDefended ? 0.2 : 0.48)
+        : 0),
+  };
+}
+
+function searchFuture(
+  board: Board,
+  turn: Color,
+  depth: number,
+  alpha: number,
+  beta: number,
+): number {
+  const legal = getLegalMoves(board, turn);
+  if (!legal.length) return turn === "black" ? -100_000 - depth : 100_000 + depth;
+  if (depth === 0) return evaluateBoard(board);
+
+  const ordered = legal
+    .map((move) => searchMovePriority(board, move, turn))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 9);
+
+  if (turn === "black") {
+    let best = -Infinity;
+    for (const item of ordered) {
+      best = Math.max(best, searchFuture(item.next, "red", depth - 1, alpha, beta));
+      alpha = Math.max(alpha, best);
+      if (beta <= alpha) break;
+    }
+    return best;
+  }
+
+  let best = Infinity;
+  for (const item of ordered) {
+    best = Math.min(best, searchFuture(item.next, "black", depth - 1, alpha, beta));
+    beta = Math.min(beta, best);
+    if (beta <= alpha) break;
+  }
+  return best;
+}
+
 export function chooseComputerMove(
   board: Board,
   difficulty: 1 | 2 | 3,
@@ -377,14 +477,14 @@ export function chooseComputerMove(
   const repetitionCounts = new Map<string, number>();
   previousKeys.forEach((key) => repetitionCounts.set(key, (repetitionCounts.get(key) ?? 0) + 1));
   const computerMovesPlayed = Math.max(0, Math.floor((previousKeys.length - 1) / 2));
-  const openingStrength = difficulty === 1 ? 0.5 : difficulty === 2 ? 0.86 : 1.08;
+  const settings = DIFFICULTY_SETTINGS[difficulty];
 
   const scored = moves.map((move) => {
     const next = applyMove(board, move);
     const replies = getLegalMoves(next, "red");
     const winsNow = replies.length === 0;
     const check = isInCheck(next, "red");
-    const responseDanger = difficulty === 1 ? 0 : bestImmediateCapture(next, "red");
+    const responseDanger = bestImmediateCapture(next, "red");
     const capture = move.captured ? VALUES[move.captured.type] : 0;
     const movedPieceAttacked = isSquareAttacked(next, move.to[0], move.to[1], "red");
     const movedPieceDefended = isSquareAttacked(next, move.to[0], move.to[1], "black");
@@ -398,20 +498,33 @@ export function chooseComputerMove(
       capture * 1.05 +
       (check ? 115 : 0) +
       centerBonus * 3 -
-      responseDanger * (difficulty === 3 ? 0.72 : 0.42) -
+      responseDanger * settings.responseDanger -
       hangingPenalty -
       repeatPenalty +
-      openingScore(move, openingPlan, computerMovesPlayed) * openingStrength +
+      openingScore(move, openingPlan, computerMovesPlayed) * settings.openingStrength +
       (winsNow ? 100_000 : 0);
-    const noise = (Math.random() - 0.5) * (difficulty === 1 ? 620 : difficulty === 2 ? 260 : 95);
-    return { move, score: logic + noise, logic };
+    return { move, next, score: logic, logic };
   });
 
+  if (difficulty === 3) {
+    const searched = [...scored].sort((a, b) => b.logic - a.logic).slice(0, 18);
+    const searchedMoves = new Set(searched.map((item) => item.move));
+    for (const item of searched) {
+      const future = searchFuture(item.next, "red", 2, -Infinity, Infinity);
+      item.logic += future * 0.72;
+    }
+    for (const item of scored) {
+      if (!searchedMoves.has(item.move)) item.logic -= 4_000;
+    }
+  }
+
+  for (const item of scored) {
+    item.score = item.logic + (Math.random() - 0.5) * settings.noise;
+  }
   scored.sort((a, b) => b.score - a.score);
   const bestLogic = Math.max(...scored.map((item) => item.logic));
-  const sensible = scored.filter((item) => item.logic >= bestLogic - (difficulty === 1 ? 700 : difficulty === 2 ? 360 : 190));
-  const poolSize = difficulty === 1 ? 6 : difficulty === 2 ? 4 : 3;
-  const pool = sensible.slice(0, Math.max(1, poolSize));
+  const sensible = scored.filter((item) => item.logic >= bestLogic - settings.sensibleGap);
+  const pool = sensible.slice(0, Math.max(1, settings.poolSize));
   const weights = pool.map((_, index) => pool.length - index);
   let pick = Math.random() * weights.reduce((sum, weight) => sum + weight, 0);
   for (let index = 0; index < pool.length; index += 1) {

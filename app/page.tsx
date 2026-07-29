@@ -33,6 +33,7 @@ type Snapshot = {
 };
 
 const STORAGE_KEY = "kids-xiangqi-v1";
+const DIFFICULTY_VERSION = 2;
 const intersections = Array.from({ length: 90 }, (_, index) => [Math.floor(index / 9), index % 9] as const);
 let activeUtterance: SpeechSynthesisUtterance | null = null;
 
@@ -113,6 +114,7 @@ export default function Home() {
         const parsed = JSON.parse(saved) as {
           history?: Snapshot[];
           difficulty?: 1 | 2 | 3;
+          difficultyVersion?: number;
           openingPlan?: OpeningPlan | null;
         };
         if (
@@ -122,7 +124,14 @@ export default function Home() {
           [1, 2, 3].includes(parsed.difficulty ?? 0)
         ) {
           setHistory(parsed.history);
-          setDifficulty(parsed.difficulty!);
+          const savedDifficulty = parsed.difficulty!;
+          setDifficulty(
+            parsed.difficultyVersion === DIFFICULTY_VERSION
+              ? savedDifficulty
+              : savedDifficulty === 3
+                ? 2
+                : 1,
+          );
           if (
             parsed.openingPlan &&
             ["screen-horses", "central-cannon", "steady-horses", "flying-elephant"].includes(
@@ -147,7 +156,10 @@ export default function Home() {
 
   useEffect(() => {
     if (!loaded) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ history, difficulty, openingPlan }));
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ history, difficulty, difficultyVersion: DIFFICULTY_VERSION, openingPlan }),
+    );
   }, [difficulty, history, loaded, openingPlan]);
 
   useEffect(() => {
@@ -335,12 +347,12 @@ export default function Home() {
             onChange={(event) => {
               const next = Number(event.target.value) as 1 | 2 | 3;
               setDifficulty(next);
-              setMessage(`难度调到${["", "一级 · 轻松", "二级 · 刚好", "三级 · 认真"][next]}。`);
+              setMessage(`难度调到${["", "一级 · 轻松", "二级 · 刚好", "三级 · 挑战"][next]}。`);
             }}
           >
             <option value={1}>一级 · 轻松</option>
             <option value={2}>二级 · 刚好</option>
-            <option value={3}>三级 · 认真</option>
+            <option value={3}>三级 · 挑战</option>
           </select>
         </label>
       </header>
