@@ -1,0 +1,11 @@
+{
+  "name": "儿童象棋",
+  "short_name": "儿童象棋",
+  "description": "认真陪孩子下好每一步的中国象棋伙伴",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f0e3",
+  "theme_color": "#f7f0e3",
+  "orientation": "any"
+}

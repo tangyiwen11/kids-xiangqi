@@ -163,6 +163,7 @@ export function isSquareAttacked(board: Board, row: number, col: number, byColor
   for (let fromRow = 0; fromRow < 10; fromRow += 1) {
     for (let fromCol = 0; fromCol < 9; fromCol += 1) {
       const piece = board[fromRow][fromCol];
+      if (fromRow === row && fromCol === col) continue;
       if (piece?.color === byColor && attacksByRule(board, piece, [fromRow, fromCol], [row, col], target)) {
         return true;
       }

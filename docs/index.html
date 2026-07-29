@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f7f0e3" />
+    <meta name="description" content="专门陪 5 岁孩子下棋的中国象棋伙伴。有挑战，也有赢的机会。" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="儿童象棋" />
+    <meta property="og:title" content="儿童象棋" />
+    <meta property="og:description" content="认真陪你下好每一步" />
+    <title>儿童象棋｜认真陪你下好每一步</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">象</span>
+          <div>
+            <h1>儿童象棋</h1>
+            <p>认真陪你下好每一步</p>
+          </div>
+        </div>
+        <label class="difficulty">
+          <span>难度</span>
+          <select id="difficulty" aria-label="选择电脑难度">
+            <option value="1">一级 · 轻松</option>
+            <option value="2" selected>二级 · 刚好</option>
+            <option value="3">三级 · 认真</option>
+          </select>
+        </label>
+      </header>
+
+      <section class="game-layout" aria-label="儿童象棋对局">
+        <div class="board-column">
+          <div class="player-strip">
+            <div class="player-avatar wood-avatar" aria-hidden="true">木</div>
+            <div><strong>小木</strong><span id="black-label">电脑朋友 · 黑方</span></div>
+            <span id="black-turn" class="turn-dot"></span>
+          </div>
+
+          <div class="board-frame">
+            <div id="board" class="xiangqi-board" aria-label="中国象棋棋盘"></div>
+          </div>
+
+          <div class="player-strip">
+            <div class="player-avatar child-avatar" aria-hidden="true">你</div>
+            <div><strong>你</strong><span>红方 · 先走</span></div>
+            <span id="red-turn" class="turn-dot active"></span>
+          </div>
+        </div>
+
+        <aside class="side-panel">
+          <div class="status-card" role="status" aria-live="polite">
+            <div id="face" class="companion-face" aria-hidden="true"><i></i><i></i><b></b></div>
+            <div>
+              <span id="status-title" class="status-kicker">轮到你啦</span>
+              <p id="message">你执红棋，先走。慢慢想，不着急。</p>
+            </div>
+          </div>
+
+          <div class="controls" aria-label="对局操作">
+            <button id="undo" type="button">
+              <span aria-hidden="true">↶</span><strong>悔棋</strong><small>想多久都可以</small>
+            </button>
+            <button id="hint" type="button">
+              <span aria-hidden="true">✦</span><strong>提示一下</strong><small>只给一点点线索</small>
+            </button>
+            <button id="reset" type="button">
+              <span aria-hidden="true">↻</span><strong>重新开始</strong><small>换一盘也没关系</small>
+            </button>
+          </div>
+          <p class="save-note"><span aria-hidden="true">✓</span>这盘棋会自动留在这里</p>
+        </aside>
+      </section>
+    </main>
+    <script src="./engine.js"></script>
+    <script src="./game.js"></script>
+  </body>
+</html>
