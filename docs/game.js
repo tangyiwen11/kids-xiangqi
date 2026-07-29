@@ -36,6 +36,25 @@
   let confirmReset = false;
   let aiTimer = null;
   let resetTimer = null;
+  let activeUtterance = null;
+
+  function speakImportant(text) {
+    if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "zh-CN";
+    utterance.rate = 0.88;
+    utterance.pitch = 1.04;
+    const chineseVoice = window.speechSynthesis
+      .getVoices()
+      .find((voice) => voice.lang.toLowerCase().startsWith("zh"));
+    if (chineseVoice) utterance.voice = chineseVoice;
+    activeUtterance = utterance;
+    utterance.onend = () => {
+      activeUtterance = null;
+    };
+    window.speechSynthesis.speak(utterance);
+  }
 
   function newGame() {
     return [{ board: createInitialBoard(), turn: "red", lastMove: null, result: null }];
@@ -209,9 +228,11 @@
         item.to[1] === col,
     );
     if (!move) {
-      message = isInCheck(current.board, "red")
+      const checked = isInCheck(current.board, "red");
+      message = checked
         ? "现在被将军了，这样走还保护不了帅。"
         : "这里不能走。换个位置再看看。";
+      speakImportant(checked ? "你被将军了，这样走不行" : "这里不能走");
       vibrate();
       render();
       return;
@@ -230,8 +251,10 @@
 
     if (result && result.winner === "red") {
       message = "将死！这一盘你赢啦。你认真想出来的！";
+      speakImportant("将死，你赢了");
     } else if (isInCheck(nextBoard, "black")) {
       message = "将军！这一步很有力量。";
+      speakImportant("将军");
     } else {
       message = dangerAfterMove(nextBoard) || "走得好。现在轮到小木想一想。";
     }
@@ -272,6 +295,7 @@
         message = "这盘小木赢了。没关系，悔一步或者再来一盘都可以。";
       } else if (isInCheck(nextBoard, "red")) {
         message = "现在被将军了。先找找怎么保护帅。";
+        speakImportant("你被将军了");
       } else {
         message = describeMove(move);
       }
@@ -312,6 +336,7 @@
     } else if (isInCheck(current.board, "red")) {
       hinted = null;
       message = "现在被将军了。看看帅能不能躲开，或者谁能来帮忙？";
+      speakImportant("你被将军了");
     } else {
       const gentleHint = findGentleHint(current.board);
       if (gentleHint) {

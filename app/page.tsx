@@ -31,6 +31,31 @@ type Snapshot = {
 
 const STORAGE_KEY = "kids-xiangqi-v1";
 const intersections = Array.from({ length: 90 }, (_, index) => [Math.floor(index / 9), index % 9] as const);
+let activeUtterance: SpeechSynthesisUtterance | null = null;
+
+function speakImportant(text: string) {
+  if (
+    typeof window === "undefined" ||
+    !("speechSynthesis" in window) ||
+    !("SpeechSynthesisUtterance" in window)
+  ) {
+    return;
+  }
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "zh-CN";
+  utterance.rate = 0.88;
+  utterance.pitch = 1.04;
+  const chineseVoice = window.speechSynthesis
+    .getVoices()
+    .find((voice) => voice.lang.toLowerCase().startsWith("zh"));
+  if (chineseVoice) utterance.voice = chineseVoice;
+  activeUtterance = utterance;
+  utterance.onend = () => {
+    activeUtterance = null;
+  };
+  window.speechSynthesis.speak(utterance);
+}
 
 function newGame(): Snapshot[] {
   return [{ board: createInitialBoard(), turn: "red", lastMove: null, result: null }];
@@ -139,6 +164,7 @@ export default function Home() {
         setMessage("这盘小木赢了。没关系，悔一步或者再来一盘都可以。");
       } else if (isInCheck(nextBoard, "red")) {
         setMessage("现在被将军了。先找找怎么保护帅。");
+        speakImportant("你被将军了");
       } else {
         setMessage(describeMove(move));
       }
@@ -165,8 +191,10 @@ export default function Home() {
       vibrate();
       if (result?.winner === "red") {
         setMessage("将死！这一盘你赢啦。你认真想出来的！");
+        speakImportant("将死，你赢了");
       } else if (isInCheck(nextBoard, "black")) {
         setMessage("将军！这一步很有力量。");
+        speakImportant("将军");
       } else {
         setMessage(dangerAfterMove(nextBoard) || "走得好。现在轮到小木想一想。");
       }
@@ -192,7 +220,9 @@ export default function Home() {
       }
       const move = selectedMoves.find((item) => item.to[0] === row && item.to[1] === col);
       if (!move) {
-        setMessage(isInCheck(board, "red") ? "现在被将军了，这样走还保护不了帅。" : "这里不能走。换个位置再看看。");
+        const checked = isInCheck(board, "red");
+        setMessage(checked ? "现在被将军了，这样走还保护不了帅。" : "这里不能走。换个位置再看看。");
+        speakImportant(checked ? "你被将军了，这样走不行" : "这里不能走");
         vibrate();
         return;
       }
@@ -229,6 +259,7 @@ export default function Home() {
     if (isInCheck(board, "red")) {
       setHinted(null);
       setMessage("现在被将军了。看看帅能不能躲开，或者谁能来帮忙？");
+      speakImportant("你被将军了");
       return;
     }
     const gentleHint = findGentleHint(board);
