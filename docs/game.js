@@ -4,8 +4,10 @@
   const {
     applyMove,
     chooseComputerMove,
+    chooseOpeningPlan,
     createInitialBoard,
     dangerAfterMove,
+    describeOpening,
     describeMove,
     findGentleHint,
     getLegalMoves,
@@ -29,6 +31,7 @@
 
   let history = newGame();
   let difficulty = 2;
+  let openingPlan = null;
   let selected = null;
   let hinted = null;
   let message = "你执红棋，先走。慢慢想，不着急。";
@@ -82,7 +85,7 @@
   }
 
   function save() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ history, difficulty }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ history, difficulty, openingPlan }));
   }
 
   function load() {
@@ -99,6 +102,13 @@
       ) {
         history = parsed.history;
         difficulty = Number(parsed.difficulty);
+        if (
+          ["screen-horses", "central-cannon", "steady-horses", "flying-elephant"].includes(
+            parsed.openingPlan,
+          )
+        ) {
+          openingPlan = parsed.openingPlan;
+        }
         difficultyElement.value = String(difficulty);
         message = "接着上次这盘下。棋盘一直帮你留着呢。";
       }
@@ -276,10 +286,13 @@
     aiTimer = setTimeout(() => {
       const latest = snapshot();
       if (latest.turn !== "black" || latest.result) return;
+      const plan = openingPlan || chooseOpeningPlan(latest.board, difficulty);
+      const computerMovesPlayed = Math.max(0, Math.floor((history.length - 1) / 2));
       const move = chooseComputerMove(
         latest.board,
         difficulty,
         history.map((item) => positionKey(item.board, item.turn)),
+        plan,
       );
       if (!move) {
         thinking = false;
@@ -289,6 +302,7 @@
       const nextBoard = applyMove(latest.board, move);
       const result = resultAfter(nextBoard, "red");
       history.push({ board: nextBoard, turn: "red", lastMove: move, result });
+      openingPlan = plan;
       thinking = false;
       aiTimer = null;
       if (result && result.winner === "black") {
@@ -296,6 +310,8 @@
       } else if (isInCheck(nextBoard, "red")) {
         message = "现在被将军了。先找找怎么保护帅。";
         speakImportant("你被将军了");
+      } else if (computerMovesPlayed < 2) {
+        message = describeOpening(plan, computerMovesPlayed > 0);
       } else {
         message = describeMove(move);
       }
@@ -362,6 +378,7 @@
     }
     if (aiTimer) clearTimeout(aiTimer);
     history = newGame();
+    openingPlan = null;
     selected = null;
     hinted = null;
     thinking = false;

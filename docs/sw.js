@@ -1,4 +1,4 @@
-const CACHE = "kids-xiangqi-pages-v2";
+const CACHE = "kids-xiangqi-pages-v3";
 const CORE = ["./", "./index.html", "./styles.css", "./engine.js", "./game.js", "./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

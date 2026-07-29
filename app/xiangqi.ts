@@ -16,6 +16,8 @@ export type Move = {
   captured: Piece | null;
 };
 
+export type OpeningPlan = "screen-horses" | "central-cannon" | "steady-horses" | "flying-elephant";
+
 const VALUES: Record<PieceType, number> = {
   king: 10_000,
   rook: 900,
@@ -255,11 +257,127 @@ function bestImmediateCapture(board: Board, color: Color) {
   return best;
 }
 
-export function chooseComputerMove(board: Board, difficulty: 1 | 2 | 3, previousKeys: string[]) {
+export function chooseOpeningPlan(board: Board, difficulty: 1 | 2 | 3): OpeningPlan {
+  const redCenterPiece = board[7][4];
+  const redUsesCentralCannon = redCenterPiece?.color === "red" && redCenterPiece.type === "cannon";
+  const redUsesFlyingElephant = redCenterPiece?.color === "red" && redCenterPiece.type === "elephant";
+  const redAdvancesSidePawn = [2, 6].some((col) => {
+    const piece = board[5][col];
+    return piece?.color === "red" && piece.type === "pawn";
+  });
+
+  if (redUsesCentralCannon) {
+    const screenHorseChance = difficulty === 1 ? 0.52 : difficulty === 2 ? 0.72 : 0.82;
+    return Math.random() < screenHorseChance ? "screen-horses" : "central-cannon";
+  }
+  if (redUsesFlyingElephant) {
+    return Math.random() < 0.68 ? "steady-horses" : "flying-elephant";
+  }
+  if (redAdvancesSidePawn) {
+    return Math.random() < 0.72 ? "steady-horses" : "flying-elephant";
+  }
+
+  const roll = Math.random();
+  if (roll < 0.5) return "steady-horses";
+  if (roll < 0.78) return "flying-elephant";
+  return "central-cannon";
+}
+
+export function describeOpening(plan: OpeningPlan, continuing = false) {
+  const prefix = continuing ? "小木继续布置" : "小木在尝试";
+  switch (plan) {
+    case "screen-horses":
+      return `${prefix}“屏风马”：让两匹马一起守住中间。`;
+    case "central-cannon":
+      return `${prefix}“中炮布阵”：把炮摆到中路，再请马来帮忙。`;
+    case "steady-horses":
+      return `${prefix}“起马布阵”：先把马跳出来，再慢慢打开车路。`;
+    case "flying-elephant":
+      return `${prefix}“飞象布阵”：先护住中间，再把马跳出来。`;
+  }
+}
+
+function sameMove(
+  move: Move,
+  from: readonly [number, number],
+  to: readonly [number, number],
+) {
+  return (
+    move.from[0] === from[0] &&
+    move.from[1] === from[1] &&
+    move.to[0] === to[0] &&
+    move.to[1] === to[1]
+  );
+}
+
+function openingScore(move: Move, plan: OpeningPlan | null, computerMovesPlayed: number) {
+  if (!plan || computerMovesPlayed >= 5) return 0;
+
+  const developsLeftHorse = sameMove(move, [0, 1], [2, 2]);
+  const developsRightHorse = sameMove(move, [0, 7], [2, 6]);
+  const developsHorse = developsLeftHorse || developsRightHorse;
+  const movesCannonToCenter =
+    sameMove(move, [2, 1], [2, 4]) || sameMove(move, [2, 7], [2, 4]);
+  const fliesElephant =
+    sameMove(move, [0, 2], [2, 4]) || sameMove(move, [0, 6], [2, 4]);
+  const advancesUsefulPawn =
+    move.piece.type === "pawn" &&
+    move.from[0] === 3 &&
+    move.to[0] === 4 &&
+    (move.from[1] === 2 || move.from[1] === 6);
+
+  let score = 0;
+  if (developsHorse) score += 95;
+  if (advancesUsefulPawn) score += 40;
+  if (
+    !move.captured &&
+    ((move.piece.type === "horse" && move.from[0] !== 0) ||
+      (move.piece.type === "cannon" && move.from[0] !== 2))
+  ) {
+    score -= 75;
+  }
+  if (!move.captured && (move.piece.type === "king" || move.piece.type === "advisor")) score -= 70;
+  if (
+    move.piece.type === "pawn" &&
+    move.from[0] === 3 &&
+    (move.from[1] === 0 || move.from[1] === 8)
+  ) {
+    score -= 45;
+  }
+
+  switch (plan) {
+    case "screen-horses":
+      if (developsHorse) score += 245;
+      if (advancesUsefulPawn) score += 90;
+      break;
+    case "central-cannon":
+      if (movesCannonToCenter) score += 310;
+      if (developsHorse) score += 155;
+      break;
+    case "steady-horses":
+      if (developsHorse) score += 255;
+      if (advancesUsefulPawn) score += 105;
+      break;
+    case "flying-elephant":
+      if (fliesElephant) score += 315;
+      if (developsHorse) score += 170;
+      break;
+  }
+  return score;
+}
+
+export function chooseComputerMove(
+  board: Board,
+  difficulty: 1 | 2 | 3,
+  previousKeys: string[],
+  openingPlan: OpeningPlan | null = null,
+) {
   const moves = getLegalMoves(board, "black");
   if (!moves.length) return null;
   const repetitionCounts = new Map<string, number>();
   previousKeys.forEach((key) => repetitionCounts.set(key, (repetitionCounts.get(key) ?? 0) + 1));
+  const computerMovesPlayed = Math.max(0, Math.floor((previousKeys.length - 1) / 2));
+  const openingStrength = difficulty === 1 ? 0.5 : difficulty === 2 ? 0.86 : 1.08;
 
   const scored = moves.map((move) => {
     const next = applyMove(board, move);
@@ -283,6 +401,7 @@ export function chooseComputerMove(board: Board, difficulty: 1 | 2 | 3, previous
       responseDanger * (difficulty === 3 ? 0.72 : 0.42) -
       hangingPenalty -
       repeatPenalty +
+      openingScore(move, openingPlan, computerMovesPlayed) * openingStrength +
       (winsNow ? 100_000 : 0);
     const noise = (Math.random() - 0.5) * (difficulty === 1 ? 620 : difficulty === 2 ? 260 : 95);
     return { move, score: logic + noise, logic };

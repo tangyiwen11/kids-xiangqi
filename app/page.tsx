@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   applyMove,
   chooseComputerMove,
+  chooseOpeningPlan,
   createInitialBoard,
   dangerAfterMove,
+  describeOpening,
   describeMove,
   findGentleHint,
   getLegalMoves,
@@ -15,6 +17,7 @@ import {
   type Board,
   type Color,
   type Move,
+  type OpeningPlan,
 } from "./xiangqi";
 
 type Result = {
@@ -81,6 +84,7 @@ function vibrate() {
 export default function Home() {
   const [history, setHistory] = useState<Snapshot[]>(newGame);
   const [difficulty, setDifficulty] = useState<1 | 2 | 3>(2);
+  const [openingPlan, setOpeningPlan] = useState<OpeningPlan | null>(null);
   const [selected, setSelected] = useState<[number, number] | null>(null);
   const [hinted, setHinted] = useState<[number, number] | null>(null);
   const [message, setMessage] = useState("你执红棋，先走。慢慢想，不着急。");
@@ -106,7 +110,11 @@ export default function Home() {
     try {
       const saved = window.localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        const parsed = JSON.parse(saved) as { history?: Snapshot[]; difficulty?: 1 | 2 | 3 };
+        const parsed = JSON.parse(saved) as {
+          history?: Snapshot[];
+          difficulty?: 1 | 2 | 3;
+          openingPlan?: OpeningPlan | null;
+        };
         if (
           Array.isArray(parsed.history) &&
           parsed.history.length &&
@@ -115,6 +123,14 @@ export default function Home() {
         ) {
           setHistory(parsed.history);
           setDifficulty(parsed.difficulty!);
+          if (
+            parsed.openingPlan &&
+            ["screen-horses", "central-cannon", "steady-horses", "flying-elephant"].includes(
+              parsed.openingPlan,
+            )
+          ) {
+            setOpeningPlan(parsed.openingPlan);
+          }
           setMessage("接着上次这盘下。棋盘一直帮你留着呢。");
         }
       }
@@ -131,8 +147,8 @@ export default function Home() {
 
   useEffect(() => {
     if (!loaded) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ history, difficulty }));
-  }, [difficulty, history, loaded]);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ history, difficulty, openingPlan }));
+  }, [difficulty, history, loaded, openingPlan]);
 
   useEffect(() => {
     if (snapshot.turn !== "black" || snapshot.result) {
@@ -144,10 +160,13 @@ export default function Home() {
     setHinted(null);
     setMessage("小木正在认真想一想…");
     const timer = window.setTimeout(() => {
+      const plan = openingPlan ?? chooseOpeningPlan(snapshot.board, difficulty);
+      const computerMovesPlayed = Math.max(0, Math.floor((history.length - 1) / 2));
       const move = chooseComputerMove(
         snapshot.board,
         difficulty,
         history.map((item) => positionKey(item.board, item.turn)),
+        plan,
       );
       if (!move) {
         setThinking(false);
@@ -159,18 +178,21 @@ export default function Home() {
         ...current,
         { board: nextBoard, turn: "red", lastMove: move, result },
       ]);
+      if (!openingPlan) setOpeningPlan(plan);
       setThinking(false);
       if (result?.winner === "black") {
         setMessage("这盘小木赢了。没关系，悔一步或者再来一盘都可以。");
       } else if (isInCheck(nextBoard, "red")) {
         setMessage("现在被将军了。先找找怎么保护帅。");
         speakImportant("你被将军了");
+      } else if (computerMovesPlayed < 2) {
+        setMessage(describeOpening(plan, computerMovesPlayed > 0));
       } else {
         setMessage(describeMove(move));
       }
     }, 520 + Math.random() * 380);
     return () => window.clearTimeout(timer);
-  }, [difficulty, history, snapshot]);
+  }, [difficulty, history, openingPlan, snapshot]);
 
   useEffect(() => {
     if (!confirmReset) return;
@@ -277,6 +299,7 @@ export default function Home() {
       return;
     }
     setHistory(newGame());
+    setOpeningPlan(null);
     setSelected(null);
     setHinted(null);
     setConfirmReset(false);

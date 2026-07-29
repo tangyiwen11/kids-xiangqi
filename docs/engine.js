@@ -3,21 +3,7 @@ var Xiangqi = (() => {
   var __defProp = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
   var __getOwnPropNames = Object.getOwnPropertyNames;
-  var __getOwnPropSymbols = Object.getOwnPropertySymbols;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
-  var __propIsEnum = Object.prototype.propertyIsEnumerable;
-  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
-  var __spreadValues = (a, b) => {
-    for (var prop in b || (b = {}))
-      if (__hasOwnProp.call(b, prop))
-        __defNormalProp(a, prop, b[prop]);
-    if (__getOwnPropSymbols)
-      for (var prop of __getOwnPropSymbols(b)) {
-        if (__propIsEnum.call(b, prop))
-          __defNormalProp(a, prop, b[prop]);
-      }
-    return a;
-  };
   var __export = (target, all) => {
     for (var name in all)
       __defProp(target, name, { get: all[name], enumerable: true });
@@ -37,10 +23,12 @@ var Xiangqi = (() => {
   __export(xiangqi_exports, {
     applyMove: () => applyMove,
     chooseComputerMove: () => chooseComputerMove,
+    chooseOpeningPlan: () => chooseOpeningPlan,
     cloneBoard: () => cloneBoard,
     createInitialBoard: () => createInitialBoard,
     dangerAfterMove: () => dangerAfterMove,
     describeMove: () => describeMove,
+    describeOpening: () => describeOpening,
     findGentleHint: () => findGentleHint,
     getLegalMoves: () => getLegalMoves,
     getMovesFrom: () => getMovesFrom,
@@ -111,7 +99,7 @@ var Xiangqi = (() => {
     return board;
   }
   function cloneBoard(board) {
-    return board.map((row) => row.map((piece) => piece ? __spreadValues({}, piece) : null));
+    return board.map((row) => row.map((piece) => piece ? { ...piece } : null));
   }
   function clearBetween(board, from, to) {
     const [fromRow, fromCol] = from;
@@ -156,7 +144,7 @@ var Xiangqi = (() => {
       case "advisor":
         return absRow === 1 && absCol === 1 && inPalace(piece.color, toRow, toCol);
       case "king": {
-        if ((target == null ? void 0 : target.type) === "king" && fromCol === toCol && clearBetween(board, from, to) === 0) return true;
+        if (target?.type === "king" && fromCol === toCol && clearBetween(board, from, to) === 0) return true;
         return absRow + absCol === 1 && inPalace(piece.color, toRow, toCol);
       }
       case "cannon": {
@@ -176,7 +164,7 @@ var Xiangqi = (() => {
     for (let row = 0; row < 10; row += 1) {
       for (let col = 0; col < 9; col += 1) {
         const piece = board[row][col];
-        if ((piece == null ? void 0 : piece.color) === color && piece.type === "king") return [row, col];
+        if (piece?.color === color && piece.type === "king") return [row, col];
       }
     }
     return null;
@@ -187,7 +175,7 @@ var Xiangqi = (() => {
       for (let fromCol = 0; fromCol < 9; fromCol += 1) {
         const piece = board[fromRow][fromCol];
         if (fromRow === row && fromCol === col) continue;
-        if ((piece == null ? void 0 : piece.color) === byColor && attacksByRule(board, piece, [fromRow, fromCol], [row, col], target)) {
+        if (piece?.color === byColor && attacksByRule(board, piece, [fromRow, fromCol], [row, col], target)) {
           return true;
         }
       }
@@ -214,7 +202,7 @@ var Xiangqi = (() => {
           for (let toCol = 0; toCol < 9; toCol += 1) {
             if (fromRow === toRow && fromCol === toCol) continue;
             const target = board[toRow][toCol];
-            if ((target == null ? void 0 : target.color) === color || (target == null ? void 0 : target.type) === "king") continue;
+            if (target?.color === color || target?.type === "king") continue;
             if (!attacksByRule(board, piece, [fromRow, fromCol], [toRow, toCol], target)) continue;
             const move = {
               from: [fromRow, fromCol],
@@ -252,10 +240,9 @@ var Xiangqi = (() => {
     return score;
   }
   function piecePosition(board, wanted) {
-    var _a;
     for (let row = 0; row < 10; row += 1) {
       for (let col = 0; col < 9; col += 1) {
-        if (((_a = board[row][col]) == null ? void 0 : _a.id) === wanted.id) return [row, col];
+        if (board[row][col]?.id === wanted.id) return [row, col];
       }
     }
     return null;
@@ -267,16 +254,91 @@ var Xiangqi = (() => {
     }
     return best;
   }
-  function chooseComputerMove(board, difficulty, previousKeys) {
+  function chooseOpeningPlan(board, difficulty) {
+    const redCenterPiece = board[7][4];
+    const redUsesCentralCannon = redCenterPiece?.color === "red" && redCenterPiece.type === "cannon";
+    const redUsesFlyingElephant = redCenterPiece?.color === "red" && redCenterPiece.type === "elephant";
+    const redAdvancesSidePawn = [2, 6].some((col) => {
+      const piece = board[5][col];
+      return piece?.color === "red" && piece.type === "pawn";
+    });
+    if (redUsesCentralCannon) {
+      const screenHorseChance = difficulty === 1 ? 0.52 : difficulty === 2 ? 0.72 : 0.82;
+      return Math.random() < screenHorseChance ? "screen-horses" : "central-cannon";
+    }
+    if (redUsesFlyingElephant) {
+      return Math.random() < 0.68 ? "steady-horses" : "flying-elephant";
+    }
+    if (redAdvancesSidePawn) {
+      return Math.random() < 0.72 ? "steady-horses" : "flying-elephant";
+    }
+    const roll = Math.random();
+    if (roll < 0.5) return "steady-horses";
+    if (roll < 0.78) return "flying-elephant";
+    return "central-cannon";
+  }
+  function describeOpening(plan, continuing = false) {
+    const prefix = continuing ? "\u5C0F\u6728\u7EE7\u7EED\u5E03\u7F6E" : "\u5C0F\u6728\u5728\u5C1D\u8BD5";
+    switch (plan) {
+      case "screen-horses":
+        return `${prefix}\u201C\u5C4F\u98CE\u9A6C\u201D\uFF1A\u8BA9\u4E24\u5339\u9A6C\u4E00\u8D77\u5B88\u4F4F\u4E2D\u95F4\u3002`;
+      case "central-cannon":
+        return `${prefix}\u201C\u4E2D\u70AE\u5E03\u9635\u201D\uFF1A\u628A\u70AE\u6446\u5230\u4E2D\u8DEF\uFF0C\u518D\u8BF7\u9A6C\u6765\u5E2E\u5FD9\u3002`;
+      case "steady-horses":
+        return `${prefix}\u201C\u8D77\u9A6C\u5E03\u9635\u201D\uFF1A\u5148\u628A\u9A6C\u8DF3\u51FA\u6765\uFF0C\u518D\u6162\u6162\u6253\u5F00\u8F66\u8DEF\u3002`;
+      case "flying-elephant":
+        return `${prefix}\u201C\u98DE\u8C61\u5E03\u9635\u201D\uFF1A\u5148\u62A4\u4F4F\u4E2D\u95F4\uFF0C\u518D\u628A\u9A6C\u8DF3\u51FA\u6765\u3002`;
+    }
+  }
+  function sameMove(move, from, to) {
+    return move.from[0] === from[0] && move.from[1] === from[1] && move.to[0] === to[0] && move.to[1] === to[1];
+  }
+  function openingScore(move, plan, computerMovesPlayed) {
+    if (!plan || computerMovesPlayed >= 5) return 0;
+    const developsLeftHorse = sameMove(move, [0, 1], [2, 2]);
+    const developsRightHorse = sameMove(move, [0, 7], [2, 6]);
+    const developsHorse = developsLeftHorse || developsRightHorse;
+    const movesCannonToCenter = sameMove(move, [2, 1], [2, 4]) || sameMove(move, [2, 7], [2, 4]);
+    const fliesElephant = sameMove(move, [0, 2], [2, 4]) || sameMove(move, [0, 6], [2, 4]);
+    const advancesUsefulPawn = move.piece.type === "pawn" && move.from[0] === 3 && move.to[0] === 4 && (move.from[1] === 2 || move.from[1] === 6);
+    let score = 0;
+    if (developsHorse) score += 95;
+    if (advancesUsefulPawn) score += 40;
+    if (!move.captured && (move.piece.type === "horse" && move.from[0] !== 0 || move.piece.type === "cannon" && move.from[0] !== 2)) {
+      score -= 75;
+    }
+    if (!move.captured && (move.piece.type === "king" || move.piece.type === "advisor")) score -= 70;
+    if (move.piece.type === "pawn" && move.from[0] === 3 && (move.from[1] === 0 || move.from[1] === 8)) {
+      score -= 45;
+    }
+    switch (plan) {
+      case "screen-horses":
+        if (developsHorse) score += 245;
+        if (advancesUsefulPawn) score += 90;
+        break;
+      case "central-cannon":
+        if (movesCannonToCenter) score += 310;
+        if (developsHorse) score += 155;
+        break;
+      case "steady-horses":
+        if (developsHorse) score += 255;
+        if (advancesUsefulPawn) score += 105;
+        break;
+      case "flying-elephant":
+        if (fliesElephant) score += 315;
+        if (developsHorse) score += 170;
+        break;
+    }
+    return score;
+  }
+  function chooseComputerMove(board, difficulty, previousKeys, openingPlan = null) {
     const moves = getLegalMoves(board, "black");
     if (!moves.length) return null;
     const repetitionCounts = /* @__PURE__ */ new Map();
-    previousKeys.forEach((key) => {
-      var _a;
-      return repetitionCounts.set(key, ((_a = repetitionCounts.get(key)) != null ? _a : 0) + 1);
-    });
+    previousKeys.forEach((key) => repetitionCounts.set(key, (repetitionCounts.get(key) ?? 0) + 1));
+    const computerMovesPlayed = Math.max(0, Math.floor((previousKeys.length - 1) / 2));
+    const openingStrength = difficulty === 1 ? 0.5 : difficulty === 2 ? 0.86 : 1.08;
     const scored = moves.map((move) => {
-      var _a;
       const next = applyMove(board, move);
       const replies = getLegalMoves(next, "red");
       const winsNow = replies.length === 0;
@@ -286,9 +348,9 @@ var Xiangqi = (() => {
       const movedPieceAttacked = isSquareAttacked(next, move.to[0], move.to[1], "red");
       const movedPieceDefended = isSquareAttacked(next, move.to[0], move.to[1], "black");
       const hangingPenalty = movedPieceAttacked ? VALUES[move.piece.type] * (movedPieceDefended ? 0.28 : 0.58) : 0;
-      const repeatPenalty = ((_a = repetitionCounts.get(positionKey(next, "red"))) != null ? _a : 0) >= 2 ? 1800 : 0;
+      const repeatPenalty = (repetitionCounts.get(positionKey(next, "red")) ?? 0) >= 2 ? 1800 : 0;
       const centerBonus = 4 - Math.abs(4 - move.to[1]);
-      const logic = materialScore(next, "black") * 0.3 + capture * 1.05 + (check ? 115 : 0) + centerBonus * 3 - responseDanger * (difficulty === 3 ? 0.72 : 0.42) - hangingPenalty - repeatPenalty + (winsNow ? 1e5 : 0);
+      const logic = materialScore(next, "black") * 0.3 + capture * 1.05 + (check ? 115 : 0) + centerBonus * 3 - responseDanger * (difficulty === 3 ? 0.72 : 0.42) - hangingPenalty - repeatPenalty + openingScore(move, openingPlan, computerMovesPlayed) * openingStrength + (winsNow ? 1e5 : 0);
       const noise = (Math.random() - 0.5) * (difficulty === 1 ? 620 : difficulty === 2 ? 260 : 95);
       return { move, score: logic + noise, logic };
     });
@@ -318,7 +380,7 @@ var Xiangqi = (() => {
     const threatened = [];
     board.forEach(
       (row, rowIndex) => row.forEach((piece, colIndex) => {
-        if ((piece == null ? void 0 : piece.color) === "red" && piece.type !== "king" && isSquareAttacked(board, rowIndex, colIndex, "black")) {
+        if (piece?.color === "red" && piece.type !== "king" && isSquareAttacked(board, rowIndex, colIndex, "black")) {
           threatened.push({
             at: [rowIndex, colIndex],
             value: VALUES[piece.type],
@@ -343,10 +405,7 @@ var Xiangqi = (() => {
     };
   }
   function dangerAfterMove(board) {
-    const captures = getLegalMoves(board, "black").filter((move) => {
-      var _a;
-      return ((_a = move.captured) == null ? void 0 : _a.color) === "red" && move.captured.type !== "pawn";
-    }).sort((a, b) => VALUES[b.captured.type] - VALUES[a.captured.type]);
+    const captures = getLegalMoves(board, "black").filter((move) => move.captured?.color === "red" && move.captured.type !== "pawn").sort((a, b) => VALUES[b.captured.type] - VALUES[a.captured.type]);
     if (!captures.length) return "";
     const piece = captures[0].captured;
     if (VALUES[piece.type] < VALUES.horse) return "";
